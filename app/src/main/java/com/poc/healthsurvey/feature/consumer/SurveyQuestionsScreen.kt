@@ -38,23 +38,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.poc.healthsurvey.core.ui.ErrorBanner
+import com.poc.healthsurvey.core.ui.LoadingScreen
+import com.poc.healthsurvey.domain.model.SurveyTemplate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SurveyQuestionsScreen(
+    email: String,
     onSubmitSuccess: (Int) -> Unit,
     onBack: () -> Unit,
-    viewModel: ConsumerViewModel = hiltViewModel()
+    viewModel: ConsumerSurveyViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val allQuestions = viewModel.getAllQuestions()
-    val allAnswered = viewModel.allQuestionsAnswered()
+
+    LaunchedEffect(Unit) {
+    }
 
     LaunchedEffect(uiState.submitScore) {
         uiState.submitScore?.let { score ->
             onSubmitSuccess(score)
         }
     }
+
+    val allAnswered = viewModel.allQuestionsAnswered()
+    val allQuestions = uiState.surveyTemplate?.questions ?: emptyList()
 
     Scaffold(
         topBar = {
@@ -76,14 +83,16 @@ fun SurveyQuestionsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Inline error banner
             if (uiState.errorMessage != null) {
                 ErrorBanner(
                     message = uiState.errorMessage!!,
                     onRetry = { viewModel.clearError() }
                 )
             }
-
+            if (uiState.isLoading) {
+                LoadingScreen(message = "Loading survey...")
+                return@Column
+            }
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -148,7 +157,7 @@ fun SurveyQuestionsScreen(
             }
 
             Button(
-                onClick = { viewModel.submitSurvey() },
+                onClick = { viewModel.submitSurvey(email) },
                 enabled = allAnswered && !uiState.isSubmitting,
                 modifier = Modifier
                     .fillMaxWidth()

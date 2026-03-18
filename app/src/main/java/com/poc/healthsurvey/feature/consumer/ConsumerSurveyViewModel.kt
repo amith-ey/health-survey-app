@@ -2,6 +2,7 @@ package com.poc.healthsurvey.feature.consumer
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.poc.healthsurvey.core.SurveyConstants
 import com.poc.healthsurvey.core.network.NetworkResult
 import com.poc.healthsurvey.domain.model.SurveySubmission
 import com.poc.healthsurvey.domain.usecase.GetSurveyTemplateUseCase
@@ -15,39 +16,29 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class ConsumerViewModel @Inject constructor(
+class ConsumerSurveyViewModel @Inject constructor(
     private val getSurveyTemplateUseCase: GetSurveyTemplateUseCase,
     private val submitSurveyUseCase: SubmitSurveyUseCase
 ) : ViewModel() {
 
     companion object {
-        const val MAX_SCORE = 32
-        private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+        const val MAX_SCORE = SurveyConstants.MAX_SCORE
     }
 
-    private val _uiState = MutableStateFlow(ConsumerUiState())
-    val uiState: StateFlow<ConsumerUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(ConsumerSurveyUiState())
+    val uiState: StateFlow<ConsumerSurveyUiState> = _uiState.asStateFlow()
 
-    fun onEmailChanged(email: String) {
-        _uiState.update {
-            it.copy(
-                email = email,
-                isEmailValid = EMAIL_REGEX.matches(email)
-            )
-        }
+    init {
+        loadTemplate()
     }
 
-    fun loadSurveyTemplate() {
+    private fun loadTemplate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true) }
             when (val result = getSurveyTemplateUseCase()) {
                 is NetworkResult.Success -> {
                     _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            surveyTemplate = result.data,
-                            answers = emptyMap()
-                        )
+                        it.copy(isLoading = false, surveyTemplate = result.data)
                     }
                 }
                 is NetworkResult.Error -> {
@@ -69,17 +60,16 @@ class ConsumerViewModel @Inject constructor(
         }
     }
 
-    fun getAllQuestions() = _uiState.value.surveyTemplate?.questions ?: emptyList()
-
     fun allQuestionsAnswered(): Boolean {
-        val questions = getAllQuestions()
+        val questions = _uiState.value.surveyTemplate?.questions ?: return false
         return questions.isNotEmpty() &&
                 questions.all { _uiState.value.answers.containsKey(it.id) }
     }
 
-    fun submitSurvey() {
+    fun submitSurvey(email: String) {
         val state = _uiState.value
         val template = state.surveyTemplate ?: return
+
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
 
@@ -96,7 +86,7 @@ class ConsumerViewModel @Inject constructor(
             }
 
             val submission = SurveySubmission(
-                email = state.email,
+                email = email,
                 score = rawScore,
                 questions = questionsWithSelections
             )
@@ -104,10 +94,7 @@ class ConsumerViewModel @Inject constructor(
             when (val result = submitSurveyUseCase(submission)) {
                 is NetworkResult.Success -> {
                     _uiState.update {
-                        it.copy(
-                            isSubmitting = false,
-                            submitScore = rawScore
-                        )
+                        it.copy(isSubmitting = false, submitScore = rawScore)
                     }
                 }
                 is NetworkResult.Error -> {

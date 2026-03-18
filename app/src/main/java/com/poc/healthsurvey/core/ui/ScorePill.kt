@@ -9,12 +9,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.poc.healthsurvey.feature.consumer.ConsumerViewModel
+import com.poc.healthsurvey.core.SurveyConstants
 
 @Composable
 fun ScorePill(
     score: Int,
-    maxScore: Int = ConsumerViewModel.MAX_SCORE,
+    maxScore: Int = SurveyConstants.MAX_SCORE,
     modifier: Modifier = Modifier
 ) {
     val percentage = if (maxScore > 0) (score.toFloat() / maxScore.toFloat()) * 100 else 0f

@@ -22,14 +22,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poc.healthsurvey.core.SurveyConstants
 
 @Composable
 fun SubmitSuccessScreen(
     score: Int,
     onBackToHome: () -> Unit
 ) {
-    val maxScore = ConsumerViewModel.MAX_SCORE
-    val percentage = (score.toFloat() / maxScore.toFloat()) * 100
+    val maxScore = SurveyConstants.MAX_SCORE
+    val percentage = if (maxScore > 0) (score.toFloat() / maxScore.toFloat()) * 100 else 0f
 
     val scoreColor = when {
         percentage >= 70 -> MaterialTheme.colorScheme.primaryContainer
@@ -96,8 +97,7 @@ fun SubmitSuccessScreen(
             Text(
                 text = scoreLabel,
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.SemiBold
             )
 
             Spacer(modifier = Modifier.height(48.dp))

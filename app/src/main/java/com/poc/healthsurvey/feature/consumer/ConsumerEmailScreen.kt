@@ -35,15 +35,15 @@ import com.poc.healthsurvey.core.ui.ErrorBanner
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConsumerEmailScreen(
-    onSurveyLoaded: () -> Unit,
+    onSurveyLoaded: (String) -> Unit,
     onBack: () -> Unit,
-    viewModel: ConsumerViewModel = hiltViewModel()
+    viewModel: ConsumerEmailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.surveyTemplate) {
         if (uiState.surveyTemplate != null) {
-            onSurveyLoaded()
+            onSurveyLoaded(uiState.email)
         }
     }
 
@@ -67,7 +67,6 @@ fun ConsumerEmailScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Inline error banner with retry
             if (uiState.errorMessage != null) {
                 ErrorBanner(
                     message = uiState.errorMessage!!,
