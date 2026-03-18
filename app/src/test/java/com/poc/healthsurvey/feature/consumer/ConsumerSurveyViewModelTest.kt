@@ -1,7 +1,6 @@
 package com.poc.healthsurvey.feature.consumer
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
-import app.cash.turbine.test
 import com.poc.healthsurvey.core.network.NetworkResult
 import com.poc.healthsurvey.domain.model.SurveyOption
 import com.poc.healthsurvey.domain.model.SurveyQuestion
@@ -28,7 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class ConsumerViewModelTest {
+class ConsumerSurveyViewModelTest {
 
     @get:Rule
     val instantTaskExecutorRule = InstantTaskExecutorRule()
@@ -36,14 +35,13 @@ class ConsumerViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var getSurveyTemplateUseCase: GetSurveyTemplateUseCase
     private lateinit var submitSurveyUseCase: SubmitSurveyUseCase
-    private lateinit var viewModel: ConsumerViewModel
+    private lateinit var viewModel: ConsumerSurveyViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         getSurveyTemplateUseCase = mockk()
         submitSurveyUseCase = mockk()
-        viewModel = ConsumerViewModel(getSurveyTemplateUseCase, submitSurveyUseCase)
     }
 
     @After
@@ -66,63 +64,46 @@ class ConsumerViewModelTest {
         )
     )
 
-    @Test
-    fun `initial state is correct`() = runTest {
-        val state = viewModel.uiState.value
-        assertEquals("", state.email)
-        assertFalse(state.isEmailValid)
-        assertNull(state.surveyTemplate)
-        assertFalse(state.isLoading)
+    private fun setupViewModel() {
+        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(fakeTemplate())
+        viewModel = ConsumerSurveyViewModel(getSurveyTemplateUseCase, submitSurveyUseCase)
     }
 
     @Test
-    fun `onEmailChanged updates email and validates correctly`() = runTest {
-        viewModel.onEmailChanged("invalid")
-        assertFalse(viewModel.uiState.value.isEmailValid)
-
-        viewModel.onEmailChanged("valid@email.com")
-        assertTrue(viewModel.uiState.value.isEmailValid)
-    }
-
-    @Test
-    fun `loadSurveyTemplate updates state with template on success`() = runTest {
-        val template = fakeTemplate()
-        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(template)
-
-        viewModel.loadSurveyTemplate()
+    fun `init loads survey template automatically`() = runTest {
+        setupViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertNotNull(state.surveyTemplate)
         assertFalse(state.isLoading)
-        assertEquals(1, state.surveyTemplate?.questions?.size)
     }
 
     @Test
-    fun `loadSurveyTemplate sets error message on failure`() = runTest {
+    fun `init sets error when template load fails`() = runTest {
         coEvery { getSurveyTemplateUseCase() } returns
-                NetworkResult.Error(message = "Network error")
-
-        viewModel.loadSurveyTemplate()
+                NetworkResult.Error(message = "Load failed")
+        viewModel = ConsumerSurveyViewModel(getSurveyTemplateUseCase, submitSurveyUseCase)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertEquals("Network error", state.errorMessage)
+        assertNull(state.surveyTemplate)
+        assertEquals("Load failed", state.errorMessage)
     }
 
     @Test
     fun `onOptionSelected stores answer correctly`() = runTest {
+        setupViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
         viewModel.onOptionSelected(questionId = 1, optionIndex = 2)
+
         assertEquals(2, viewModel.uiState.value.answers[1])
     }
 
     @Test
     fun `allQuestionsAnswered returns false when not all answered`() = runTest {
-        val template = fakeTemplate()
-        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(template)
-
-        viewModel.loadSurveyTemplate()
+        setupViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertFalse(viewModel.allQuestionsAnswered())
@@ -130,10 +111,7 @@ class ConsumerViewModelTest {
 
     @Test
     fun `allQuestionsAnswered returns true when all answered`() = runTest {
-        val template = fakeTemplate()
-        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(template)
-
-        viewModel.loadSurveyTemplate()
+        setupViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onOptionSelected(questionId = 1, optionIndex = 0)
@@ -143,17 +121,14 @@ class ConsumerViewModelTest {
 
     @Test
     fun `submitSurvey sets submitScore on success`() = runTest {
-        val template = fakeTemplate()
-        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(template)
+        setupViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
         coEvery { submitSurveyUseCase(any()) } returns
                 NetworkResult.Success(SurveyResult(email = "test@test.com", score = 3))
 
-        viewModel.onEmailChanged("test@test.com")
-        viewModel.loadSurveyTemplate()
-        testDispatcher.scheduler.advanceUntilIdle()
-
         viewModel.onOptionSelected(questionId = 1, optionIndex = 0)
-        viewModel.submitSurvey()
+        viewModel.submitSurvey("test@test.com")
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -163,17 +138,14 @@ class ConsumerViewModelTest {
 
     @Test
     fun `submitSurvey sets error on failure`() = runTest {
-        val template = fakeTemplate()
-        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(template)
+        setupViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
         coEvery { submitSurveyUseCase(any()) } returns
                 NetworkResult.Error(message = "Submission failed")
 
-        viewModel.onEmailChanged("test@test.com")
-        viewModel.loadSurveyTemplate()
-        testDispatcher.scheduler.advanceUntilIdle()
-
         viewModel.onOptionSelected(questionId = 1, optionIndex = 0)
-        viewModel.submitSurvey()
+        viewModel.submitSurvey("test@test.com")
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -182,39 +154,27 @@ class ConsumerViewModelTest {
     }
 
     @Test
+    fun `submitSurvey does nothing when template is null`() = runTest {
+        coEvery { getSurveyTemplateUseCase() } returns
+                NetworkResult.Error(message = "Failed")
+        viewModel = ConsumerSurveyViewModel(getSurveyTemplateUseCase, submitSurveyUseCase)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.submitSurvey("test@test.com")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.submitScore)
+    }
+
+    @Test
     fun `clearError sets errorMessage to null`() = runTest {
         coEvery { getSurveyTemplateUseCase() } returns
                 NetworkResult.Error(message = "Some error")
-
-        viewModel.loadSurveyTemplate()
+        viewModel = ConsumerSurveyViewModel(getSurveyTemplateUseCase, submitSurveyUseCase)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.clearError()
 
         assertNull(viewModel.uiState.value.errorMessage)
-    }
-
-    @Test
-    fun `uiState emits loading then success via turbine`() = runTest {
-        val template = fakeTemplate()
-        coEvery { getSurveyTemplateUseCase() } returns NetworkResult.Success(template)
-
-        viewModel.uiState.test {
-            val initial = awaitItem()
-            assertFalse(initial.isLoading)
-
-            viewModel.loadSurveyTemplate()
-
-            val loading = awaitItem()
-            assertTrue(loading.isLoading)
-
-            testDispatcher.scheduler.advanceUntilIdle()
-
-            val success = awaitItem()
-            assertFalse(success.isLoading)
-            assertNotNull(success.surveyTemplate)
-
-            cancelAndIgnoreRemainingEvents()
-        }
     }
 }
